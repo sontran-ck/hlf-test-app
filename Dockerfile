@@ -12,9 +12,9 @@ RUN npm ci --only=production
 # Production stage
 FROM node:18-alpine
 
-# Create non-root user
-RUN addgroup -g 1000 appuser && \
-    adduser -D -u 1000 -G appuser appuser
+# Create non-root user with high UID/GID to avoid conflicts
+RUN addgroup -g 10000 appuser && \
+    adduser -D -u 10000 -G appuser appuser
 
 WORKDIR /app
 
