@@ -22,14 +22,14 @@ test: ## Run tests
 	npm test
 
 docker-build: ## Build Docker image
-	docker build -t hlf-test-app:latest .
+	docker build -t hlf-lab-test-app:latest .
 
 docker-run: ## Run Docker container locally
 	docker run -p 8080:8080 \
 		-e ENVIRONMENT=development \
 		-e LOG_LEVEL=debug \
 		-e PORT=8080 \
-		hlf-test-app:latest
+		hlf-lab-test-app:latest
 
 push: ## Build and push Docker image to ECR
 	./scripts/build-and-push.sh

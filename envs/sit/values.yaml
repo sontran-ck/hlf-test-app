@@ -3,7 +3,7 @@
 replicaCount: 2
 
 image:
-  repository: 337608386221.dkr.ecr.ap-southeast-1.amazonaws.com/hlf-ecr-sit-test-app
+  repository: 337608386221.dkr.ecr.ap-southeast-1.amazonaws.com/hlf-lab-ecr-sit-test-app
   pullPolicy: Always
   tag: "latest"
 

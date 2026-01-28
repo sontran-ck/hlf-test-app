@@ -29,7 +29,7 @@ kubectl create namespace ${APP_NAMESPACE} --dry-run=client -o yaml | kubectl app
 echo "Deploying application modules..."
 
 # Get ECR repository URL from environment or construct it
-ECR_REPOSITORY="${ECR_REPOSITORY_URL:-${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/hlf-ecr-sit-test-app}"
+ECR_REPOSITORY="${ECR_REPOSITORY_URL:-${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/hlf-lab-ecr-sit-test-app}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 
 echo "Using image: ${ECR_REPOSITORY}:${IMAGE_TAG}"

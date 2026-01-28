@@ -3,7 +3,7 @@ version: 0.2
 env:
   variables:
     AWS_DEFAULT_REGION: "ap-southeast-1"
-    EKS_CLUSTER_NAME: "hlf-eks-sit"
+    EKS_CLUSTER_NAME: "hlf-lab-eks-sit"
     NGINX_INGRESS_ENABLE: "false"
     METRICS_SERVER_ENABLE: "false"
 

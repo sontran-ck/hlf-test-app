@@ -3,7 +3,7 @@ version: 0.2
 env:
   variables:
     AWS_DEFAULT_REGION: "ap-southeast-1"
-    EKS_CLUSTER_NAME: "hlf-eks-sit"
+    EKS_CLUSTER_NAME: "hlf-lab-eks-sit"
     APP_NAMESPACE: "test-app"
     ENVIRONMENT: "sit"
     MODULE_ENABLE: "true"
@@ -63,7 +63,7 @@ phases:
           
           # Set image tag from git commit or use latest
           export IMAGE_TAG=${CODEBUILD_RESOLVED_SOURCE_VERSION:-latest}
-          export ECR_REPOSITORY_URL="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/hlf-ecr-sit-test-app"
+          export ECR_REPOSITORY_URL="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/hlf-lab-ecr-sit-test-app"
           
           # Execute deployment script
           ./script/deploy_module.sh

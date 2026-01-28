@@ -98,7 +98,7 @@ app.get('/', (req, res) => {
 // Info endpoint
 app.get('/info', (req, res) => {
   res.json({
-    application: 'hlf-test-app',
+    application: 'hlf-lab-test-app',
     version: '1.0.0',
     environment: ENVIRONMENT,
     node_version: process.version,

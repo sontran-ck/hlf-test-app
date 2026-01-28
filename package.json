@@ -1,5 +1,5 @@
 {
-  "name": "hlf-test-app",
+  "name": "hlf-lab-test-app",
   "version": "1.0.0",
   "description": "Simple test application for HLF infrastructure",
   "main": "src/index.js",

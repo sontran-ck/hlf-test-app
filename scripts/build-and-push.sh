@@ -4,7 +4,7 @@ set -e
 # Configuration
 AWS_REGION="${AWS_REGION:-ap-southeast-1}"
 AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-337608386221}"
-ECR_REPOSITORY="hlf-ecr-sit-test-app"
+ECR_REPOSITORY="hlf-lab-ecr-sit-test-app"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 
 echo "=========================================="
