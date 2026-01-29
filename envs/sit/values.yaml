@@ -40,3 +40,10 @@ service:
   type: ClusterIP
   port: 80
   targetPort: 8080
+
+# Enable EFS persistent storage for SIT
+persistence:
+  enabled: true
+  size: 10Gi
+  mountPath: /app/data
+  storageClass: efs-sc

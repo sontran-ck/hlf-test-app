@@ -82,3 +82,10 @@ database:
 app:
   logLevel: info
   port: 8080
+
+# Persistent storage (EFS)
+persistence:
+  enabled: true
+  size: 10Gi
+  mountPath: /app/data
+  storageClass: efs-sc

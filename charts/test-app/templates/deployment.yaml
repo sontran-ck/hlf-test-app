@@ -27,6 +27,40 @@ spec:
       serviceAccountName: {{ include "test-app.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.database.enabled }}
+      initContainers:
+      - name: wait-for-db
+        image: mysql:8.0
+        command:
+        - sh
+        - -c
+        - |
+          echo "=== Database Connection Test ==="
+          echo "Testing connection to RDS Aurora..."
+          MAX_RETRIES=30
+          RETRY_COUNT=0
+          
+          until mysql -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USERNAME}" -p"${DB_PASSWORD}" -e "SELECT 1" > /dev/null 2>&1; do
+            RETRY_COUNT=$((RETRY_COUNT+1))
+            if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+              echo "❌ Failed to connect to database after $MAX_RETRIES attempts"
+              exit 1
+            fi
+            echo "⏳ Database is unavailable - attempt $RETRY_COUNT/$MAX_RETRIES"
+            sleep 5
+          done
+          
+          echo "✅ Database connection successful!"
+          echo "Database version:"
+          mysql -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USERNAME}" -p"${DB_PASSWORD}" -e "SELECT VERSION();"
+          echo "Current database: ${DB_NAME}"
+          mysql -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USERNAME}" -p"${DB_PASSWORD}" "${DB_NAME}" -e "SELECT DATABASE();"
+          echo "=== Ready to start application ==="
+        envFrom:
+        - secretRef:
+            name: rds-database-secret
+            optional: false
+      {{- end }}
       containers:
       - name: {{ .Chart.Name }}
         securityContext:
@@ -40,9 +74,16 @@ spec:
         envFrom:
         - configMapRef:
             name: {{ include "test-app.fullname" . }}-config
+        {{- if .Values.database.enabled }}
+        # Use External Secrets for database credentials
+        - secretRef:
+            name: rds-database-secret
+            optional: true
+        {{- end }}
         env:
         {{- if .Values.database.enabled }}
-        - name: DB_PASSWORD
+        # Legacy support: fallback to manual secret if External Secrets not available
+        - name: DB_PASSWORD_FALLBACK
           valueFrom:
             secretKeyRef:
               name: {{ include "test-app.fullname" . }}-db-secret
@@ -67,6 +108,17 @@ spec:
           failureThreshold: 3
         resources:
           {{- toYaml .Values.resources | nindent 12 }}
+        {{- if .Values.persistence.enabled }}
+        volumeMounts:
+        - name: app-data
+          mountPath: {{ .Values.persistence.mountPath }}
+        {{- end }}
+      {{- if .Values.persistence.enabled }}
+      volumes:
+      - name: app-data
+        persistentVolumeClaim:
+          claimName: {{ include "test-app.fullname" . }}-data
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

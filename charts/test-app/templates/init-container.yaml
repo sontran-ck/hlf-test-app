@@ -1,0 +1,24 @@
+{{- if .Values.database.enabled }}
+# This is a template snippet to be included in deployment.yaml
+# It provides an init container to verify database connectivity before starting the main app
+
+# Add this to deployment.yaml spec.template.spec:
+#
+# initContainers:
+# - name: wait-for-db
+#   image: mysql:8.0
+#   command:
+#   - sh
+#   - -c
+#   - |
+#     echo "Waiting for database to be ready..."
+#     until mysql -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USERNAME}" -p"${DB_PASSWORD}" -e "SELECT 1" > /dev/null 2>&1; do
+#       echo "Database is unavailable - sleeping"
+#       sleep 5
+#     done
+#     echo "Database is ready!"
+#     mysql -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USERNAME}" -p"${DB_PASSWORD}" "${DB_NAME}" -e "SHOW TABLES;"
+#   envFrom:
+#   - secretRef:
+#       name: rds-database-secret
+{{- end }}

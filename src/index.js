@@ -27,6 +27,32 @@ let pool = null;
 if (dbConfig.host && dbConfig.user && dbConfig.database) {
   pool = mysql.createPool(dbConfig);
   console.log('Database connection pool created');
+  
+  // Test connection immediately on startup
+  (async () => {
+    try {
+      const [rows] = await pool.query('SELECT VERSION() as version, DATABASE() as db, NOW() as time');
+      log('info', 'Database connection verified', {
+        host: dbConfig.host,
+        database: dbConfig.database,
+        version: rows[0].version,
+        current_db: rows[0].db,
+        server_time: rows[0].time
+      });
+    } catch (error) {
+      log('error', 'Failed to verify database connection on startup', {
+        host: dbConfig.host,
+        database: dbConfig.database,
+        error: error.message
+      });
+    }
+  })();
+} else {
+  log('warn', 'Database not configured - running without database connection', {
+    host_provided: !!dbConfig.host,
+    user_provided: !!dbConfig.user,
+    database_provided: !!dbConfig.database
+  });
 }
 
 // Logging function
@@ -111,8 +137,74 @@ app.get('/info', (req, res) => {
   });
 });
 
-// Database test endpoint
+// Database test endpoint - comprehensive connection test
 app.get('/db/test', async (req, res) => {
+  if (!pool) {
+    return res.status(503).json({
+      error: 'Database not configured',
+      config: {
+        host: dbConfig.host || 'not set',
+        port: dbConfig.port,
+        database: dbConfig.database || 'not set',
+        user: dbConfig.user || 'not set'
+      }
+    });
+  }
+
+  try {
+    // Test 1: Basic connectivity
+    const [basicTest] = await pool.query('SELECT 1 as test');
+    
+    // Test 2: Server info
+    const [serverInfo] = await pool.query('SELECT NOW() as current_time, VERSION() as version, DATABASE() as current_db, USER() as current_user');
+    
+    // Test 3: Show tables
+    const [tables] = await pool.query('SHOW TABLES');
+    
+    // Test 4: Connection status
+    const [status] = await pool.query('SHOW STATUS WHERE Variable_name = "Threads_connected"');
+    
+    res.json({
+      status: 'connected',
+      message: '✅ Database connection successful',
+      connection: {
+        host: dbConfig.host,
+        port: dbConfig.port,
+        database: dbConfig.database,
+        user: dbConfig.user
+      },
+      server: {
+        version: serverInfo[0].version,
+        current_time: serverInfo[0].current_time,
+        current_db: serverInfo[0].current_db,
+        current_user: serverInfo[0].current_user
+      },
+      tables_count: tables.length,
+      tables: tables.map(t => Object.values(t)[0]),
+      connections: status[0] || null
+    });
+  } catch (error) {
+    log('error', 'Database test failed', { 
+      error: error.message,
+      code: error.code,
+      errno: error.errno
+    });
+    res.status(500).json({
+      error: 'Database connection failed',
+      message: error.message,
+      code: error.code,
+      config: {
+        host: dbConfig.host,
+        port: dbConfig.port,
+        database: dbConfig.database,
+        user: dbConfig.user
+      }
+    });
+  }
+});
+
+// Database write test endpoint
+app.post('/db/write-test', async (req, res) => {
   if (!pool) {
     return res.status(503).json({
       error: 'Database not configured'
@@ -120,15 +212,41 @@ app.get('/db/test', async (req, res) => {
   }
 
   try {
-    const [rows] = await pool.query('SELECT NOW() as current_time, VERSION() as version');
+    // Create test table if not exists
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS test_connection (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        test_value VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Insert test data
+    const testValue = `test-${Date.now()}`;
+    const [insertResult] = await pool.query(
+      'INSERT INTO test_connection (test_value) VALUES (?)',
+      [testValue]
+    );
+    
+    // Read back the data
+    const [rows] = await pool.query(
+      'SELECT * FROM test_connection WHERE id = ?',
+      [insertResult.insertId]
+    );
+    
     res.json({
-      status: 'connected',
-      data: rows[0]
+      status: 'success',
+      message: '✅ Database write test successful',
+      test: {
+        inserted_id: insertResult.insertId,
+        test_value: testValue,
+        retrieved_data: rows[0]
+      }
     });
   } catch (error) {
-    log('error', 'Database test failed', { error: error.message });
+    log('error', 'Database write test failed', { error: error.message });
     res.status(500).json({
-      error: 'Database connection failed',
+      error: 'Database write test failed',
       message: error.message
     });
   }
