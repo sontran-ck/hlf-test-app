@@ -9,7 +9,7 @@ echo "=========================================="
 ENVIRONMENT="${ENVIRONMENT:-sit}"
 AWS_REGION="${AWS_DEFAULT_REGION:-ap-southeast-1}"
 CLUSTER_NAME="${EKS_CLUSTER_NAME}"
-APP_NAMESPACE="${APP_NAMESPACE:-test-app}"
+APP_NAMESPACE="${APP_NAMESPACE:-default}"
 
 echo "Environment: ${ENVIRONMENT}"
 echo "AWS Region: ${AWS_REGION}"
@@ -20,10 +20,6 @@ echo "Application Namespace: ${APP_NAMESPACE}"
 echo "Checking Kubernetes connectivity..."
 kubectl cluster-info
 kubectl get nodes
-
-# Create namespace if it doesn't exist
-echo "Creating namespace ${APP_NAMESPACE} if not exists..."
-kubectl create namespace ${APP_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
 # Deploy application using Helm
 echo "Deploying application modules..."
@@ -37,7 +33,6 @@ echo "Using image: ${ECR_REPOSITORY}:${IMAGE_TAG}"
 # Deploy the test application
 helm upgrade --install test-app ./charts/test-app \
     --namespace ${APP_NAMESPACE} \
-    --create-namespace \
     --set image.repository=${ECR_REPOSITORY} \
     --set image.tag=${IMAGE_TAG} \
     --set environment=${ENVIRONMENT} \
