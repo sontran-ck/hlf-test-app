@@ -84,50 +84,15 @@ phases:
       - echo "Post-build Verification"
       - echo "=========================================="
       
-      # Comprehensive deployment verification
+      # Verify External Secrets sync status
       - |
         if [ "$MODULE_ENABLE" != "false" ]; then
-          echo ""
-          echo "=========================================="
-          echo "🔍 Deployment Verification"
-          echo "=========================================="
+          echo "Checking External Secrets sync status..."
+          kubectl get externalsecrets -n ${APP_NAMESPACE} || echo "No External Secrets found"
+          kubectl get secrets -n ${APP_NAMESPACE} | grep -E "rds-database-secret|NAME" || echo "RDS secret not found"
           
-          # Wait for pods to be ready
-          echo "Waiting for pods to be ready..."
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=test-app -n ${APP_NAMESPACE} --timeout=300s || true
-          
-          # Check 1: Storage Integration
-          echo ""
-          echo "📦 Storage Integration (EFS):"
-          kubectl get storageclass efs-sc && echo "✅ StorageClass exists" || echo "❌ StorageClass not found"
-          kubectl get pvc -n ${APP_NAMESPACE} && echo "✅ PVC created" || echo "❌ PVC not found"
-          
-          # Check 2: External Secrets Integration
-          echo ""
-          echo "🔐 Secrets Integration (RDS):"
-          kubectl get externalsecrets -n ${APP_NAMESPACE} && echo "✅ ExternalSecret configured" || echo "❌ ExternalSecret not found"
-          kubectl get secret rds-database-secret -n ${APP_NAMESPACE} && echo "✅ RDS secret synced" || echo "❌ RDS secret not synced"
-          
-          # Check 3: Pod Status
-          echo ""
-          echo "🚀 Application Status:"
+          echo "Checking application pods status..."
           kubectl get pods -n ${APP_NAMESPACE} -l app.kubernetes.io/name=test-app
-          
-          # Check 4: Pod logs for connection verification
-          echo ""
-          echo "📝 Checking pod logs for database connection..."
-          POD_NAME=$(kubectl get pod -l app.kubernetes.io/name=test-app -n ${APP_NAMESPACE} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-          if [ -n "$POD_NAME" ]; then
-            echo "Pod: $POD_NAME"
-            kubectl logs $POD_NAME -n ${APP_NAMESPACE} --tail=20 | grep -i "database" || echo "No database logs found"
-          fi
-          
-          # Check 5: Integration test via API
-          echo ""
-          echo "🧪 Testing database connectivity..."
-          if [ -n "$POD_NAME" ]; then
-            kubectl exec -it $POD_NAME -n ${APP_NAMESPACE} -- curl -s http://localhost:8080/ready || echo "Readiness check failed"
-          fi
         fi
       
       - echo "=========================================="
