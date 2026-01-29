@@ -18,6 +18,7 @@ phases:
   pre_build:
     commands:
       - echo "Pre-build phase started..."
+      - export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
       - echo "AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID"
       - echo "AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION"
       - echo "EKS_CLUSTER_NAME=$EKS_CLUSTER_NAME"
@@ -64,6 +65,9 @@ phases:
           # Set image tag from git commit or use latest
           export IMAGE_TAG=${CODEBUILD_RESOLVED_SOURCE_VERSION:-latest}
           export ECR_REPOSITORY_URL="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/hlf-lab-ecr-sit-test-app"
+          
+          echo "ECR_REPOSITORY_URL=${ECR_REPOSITORY_URL}"
+          echo "IMAGE_TAG=${IMAGE_TAG}"
           
           # Execute deployment script
           ./script/deploy_module.sh
