@@ -4,13 +4,52 @@ env:
      AWS_DEFAULT_REGION: "ap-southeast-1"
      EKS_CLUSTER_NAME: "hlf-lab-eks-sit-cluster"
      CIS_ENABLE: "false"
+     ECR_REPOSITORY_NAME: "hlf-lab-ecr-sit-test-app"
 
 phases:
+  pre_build:
+    commands:
+      - echo "=========================================="
+      - echo "Container Image Verification"
+      - echo "=========================================="
+      - echo "Getting AWS Account ID..."
+      - export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - export ECR_REPOSITORY_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}"
+      - echo "ECR Repository URI=$ECR_REPOSITORY_URI"
+      
+      # Set IMAGE_TAG from CodeBuild commit ID or use latest
+      - export IMAGE_TAG=${CODEBUILD_RESOLVED_SOURCE_VERSION:-latest}
+      - echo "Image Tag=$IMAGE_TAG"
+
   build:
     commands:
       - |
+        echo "Verifying image exists in ECR..."
+        echo "Note: Image is built and pushed by GitHub Actions workflow"
+        
+        # Verify image exists in ECR
+        IMAGE_EXISTS=$(aws ecr describe-images \
+          --repository-name ${ECR_REPOSITORY_NAME} \
+          --image-ids imageTag=${IMAGE_TAG} \
+          --region ${AWS_DEFAULT_REGION} \
+          --query 'imageDetails[0].imageTags[0]' \
+          --output text 2>/dev/null || echo "NOT_FOUND")
+        
+        if [ "$IMAGE_EXISTS" = "NOT_FOUND" ]; then
+          echo "WARNING: Image ${ECR_REPOSITORY_URI}:${IMAGE_TAG} not found in ECR"
+          echo "Please ensure GitHub Actions workflow has completed successfully"
+          exit 1
+        else
+          echo "✓ Image verified: ${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
+        fi
+      
+      # Container Image Sync (optional - for syncing to other registries/regions)
+      - |
         if [ "$CIS_ENABLE" = "true" ]; then
-          echo "CIS is enabled, start syncing image..."
+          echo "=========================================="
+          echo "CIS is enabled, syncing image to other registries..."
+          echo "=========================================="
+          
           # Install aws-iam-authenticator and kubectl
           curl -o aws-iam-authenticator https://s3.us-west-2.amazonaws.com/amazon-eks/1.21.2/2021-07-05/bin/linux/amd64/aws-iam-authenticator
           chmod +x ./aws-iam-authenticator
@@ -28,12 +67,18 @@ phases:
           aws eks update-kubeconfig --region $AWS_DEFAULT_REGION --name $EKS_CLUSTER_NAME
           kubectl get nodes
           
-          echo "Container image sync would be performed here if configured"
+          echo "Container image sync to other registries would be performed here if configured"
+          echo "Example: Copy to another region, another AWS account, or another registry"
         else
-          echo "CIS is disabled. Skipping image sync."
+          echo "CIS is disabled. Skipping image sync to other registries."
         fi
-      - echo "Container Image Sync step finished."
 
   post_build:
     commands:
-       - echo -e "\nContainer Image Sync step completed"
+       - echo -e "\n=========================================="
+       - echo "Container Image Verification Completed"
+       - echo "=========================================="
+       - echo "Image: ${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
+       - echo "ECR Console: https://console.aws.amazon.com/ecr/repositories/private/${AWS_ACCOUNT_ID}/${ECR_REPOSITORY_NAME}?region=${AWS_DEFAULT_REGION}"
+       - echo "Image built by: GitHub Actions workflow"
+       - echo "=========================================="

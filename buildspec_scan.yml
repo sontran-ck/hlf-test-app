@@ -1,0 +1,230 @@
+version: 0.2
+
+env:
+  variables:
+    AWS_DEFAULT_REGION: "ap-southeast-1"
+    ENVIRONMENT: "sit"
+    ECR_REPOSITORY_NAME: "hlf-lab-ecr-sit-test-app"
+    # Scan configuration
+    SCAN_ON_PUSH_ENABLED: "true"
+    BLOCK_ON_CRITICAL: "false"  # SIT: Warn only. Set to "true" for PROD
+    ENABLE_NOTIFICATION: "false"  # SIT: No notification. Set to "true" for UAT/PROD
+    SNS_TOPIC_ARN: ""  # Will be set from CloudFormation parameter
+    # Severity thresholds
+    MAX_CRITICAL_FINDINGS: "0"
+    MAX_HIGH_FINDINGS: "999"
+    
+phases:
+  pre_build:
+    commands:
+      - echo "=========================================="
+      - echo "ECR Vulnerability Scanning with Inspector"
+      - echo "=========================================="
+      - echo "Environment=$ENVIRONMENT"
+      - echo "ECR Repository=$ECR_REPOSITORY_NAME"
+      
+      # Get AWS Account ID
+      - export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - export ECR_REPOSITORY_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}"
+      
+      # Set IMAGE_TAG from CodeBuild's built-in variable (contains commit ID when triggered from CodePipeline)
+      - export IMAGE_TAG=${CODEBUILD_RESOLVED_SOURCE_VERSION:-latest}
+      
+      - echo "Image Tag=$IMAGE_TAG"
+      - echo "ECR Repository URI=$ECR_REPOSITORY_URI"
+      - echo "Block on Critical=$BLOCK_ON_CRITICAL"
+      - echo "Enable Notification=$ENABLE_NOTIFICATION"
+      - echo "=========================================="
+      
+  build:
+    commands:
+      - echo "Waiting for Inspector scan to complete..."
+      - echo "Note: ECR automatically triggers Inspector scan on image push"
+      
+      # Wait for scan to complete (max 5 minutes)
+      - |
+        MAX_WAIT=300  # 5 minutes
+        WAIT_INTERVAL=10
+        ELAPSED=0
+        
+        while [ $ELAPSED -lt $MAX_WAIT ]; do
+          SCAN_STATUS=$(aws ecr describe-image-scan-findings \
+            --repository-name "${ECR_REPOSITORY_NAME}" \
+            --image-id imageTag="${IMAGE_TAG}" \
+            --region "${AWS_DEFAULT_REGION}" \
+            --query 'imageScanStatus.status' \
+            --output text 2>/dev/null || echo "PENDING")
+          
+          echo "Scan status: $SCAN_STATUS (elapsed: ${ELAPSED}s)"
+          
+          if [ "$SCAN_STATUS" = "COMPLETE" ]; then
+            echo "Scan completed successfully"
+            break
+          elif [ "$SCAN_STATUS" = "FAILED" ]; then
+            echo "ERROR: Image scan failed!"
+            exit 1
+          fi
+          
+          sleep $WAIT_INTERVAL
+          ELAPSED=$((ELAPSED + WAIT_INTERVAL))
+        done
+        
+        if [ $ELAPSED -ge $MAX_WAIT ]; then
+          echo "WARNING: Scan did not complete within $MAX_WAIT seconds"
+          echo "Proceeding anyway, but scan results may not be available"
+        fi
+      
+      # Get scan findings
+      - echo "Retrieving scan findings..."
+      - |
+        SCAN_FINDINGS=$(aws ecr describe-image-scan-findings \
+          --repository-name "${ECR_REPOSITORY_NAME}" \
+          --image-id imageTag="${IMAGE_TAG}" \
+          --region "${AWS_DEFAULT_REGION}" 2>&1)
+        
+        if [ $? -ne 0 ]; then
+          echo "WARNING: Could not retrieve scan findings"
+          echo "$SCAN_FINDINGS"
+          if [ "$BLOCK_ON_CRITICAL" = "true" ]; then
+            echo "ERROR: Blocking deployment due to scan retrieval failure"
+            exit 1
+          else
+            echo "WARNING: Continuing despite scan retrieval failure (non-blocking mode)"
+            exit 0
+          fi
+        fi
+        
+        # Parse findings count
+        CRITICAL_COUNT=$(echo "$SCAN_FINDINGS" | jq -r '.imageScanFindings.findingSeverityCounts.CRITICAL // 0')
+        HIGH_COUNT=$(echo "$SCAN_FINDINGS" | jq -r '.imageScanFindings.findingSeverityCounts.HIGH // 0')
+        MEDIUM_COUNT=$(echo "$SCAN_FINDINGS" | jq -r '.imageScanFindings.findingSeverityCounts.MEDIUM // 0')
+        LOW_COUNT=$(echo "$SCAN_FINDINGS" | jq -r '.imageScanFindings.findingSeverityCounts.LOW // 0')
+        INFORMATIONAL_COUNT=$(echo "$SCAN_FINDINGS" | jq -r '.imageScanFindings.findingSeverityCounts.INFORMATIONAL // 0')
+        UNDEFINED_COUNT=$(echo "$SCAN_FINDINGS" | jq -r '.imageScanFindings.findingSeverityCounts.UNDEFINED // 0')
+        
+        echo "=========================================="
+        echo "Vulnerability Scan Results"
+        echo "=========================================="
+        echo "CRITICAL:      $CRITICAL_COUNT"
+        echo "HIGH:          $HIGH_COUNT"
+        echo "MEDIUM:        $MEDIUM_COUNT"
+        echo "LOW:           $LOW_COUNT"
+        echo "INFORMATIONAL: $INFORMATIONAL_COUNT"
+        echo "UNDEFINED:     $UNDEFINED_COUNT"
+        echo "=========================================="
+        
+        # Export for notification
+        export CRITICAL_COUNT
+        export HIGH_COUNT
+        export MEDIUM_COUNT
+        export LOW_COUNT
+        export INFORMATIONAL_COUNT
+        export UNDEFINED_COUNT
+        
+        # Save findings to file for artifact
+        echo "$SCAN_FINDINGS" | jq '.' > scan-findings.json
+        
+        # Create summary report
+        cat > scan-summary.txt <<EOF
+        ========================================
+        ECR Vulnerability Scan Report
+        ========================================
+        Environment: $ENVIRONMENT
+        Repository: $ECR_REPOSITORY_NAME
+        Image Tag: $IMAGE_TAG
+        Scan Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        
+        Findings Summary:
+        -----------------
+        CRITICAL:      $CRITICAL_COUNT
+        HIGH:          $HIGH_COUNT
+        MEDIUM:        $MEDIUM_COUNT
+        LOW:           $LOW_COUNT
+        INFORMATIONAL: $INFORMATIONAL_COUNT
+        UNDEFINED:     $UNDEFINED_COUNT
+        
+        Console Link:
+        https://console.aws.amazon.com/ecr/repositories/private/${AWS_ACCOUNT_ID}/${ECR_REPOSITORY_NAME}?region=${AWS_DEFAULT_REGION}
+        ========================================
+        EOF
+        
+        cat scan-summary.txt
+        
+  post_build:
+    commands:
+      # Send notification if enabled
+      - |
+        if [ "$ENABLE_NOTIFICATION" = "true" ] && [ -n "$SNS_TOPIC_ARN" ]; then
+          echo "Sending scan results notification..."
+          
+          SEVERITY_LABEL="INFO"
+          if [ "$CRITICAL_COUNT" -gt 0 ]; then
+            SEVERITY_LABEL="CRITICAL"
+          elif [ "$HIGH_COUNT" -gt 0 ]; then
+            SEVERITY_LABEL="HIGH"
+          elif [ "$MEDIUM_COUNT" -gt 0 ]; then
+            SEVERITY_LABEL="MEDIUM"
+          fi
+          
+          NOTIFICATION_MESSAGE=$(cat <<EOF
+        ECR Vulnerability Scan Results - $SEVERITY_LABEL
+
+        Environment: $ENVIRONMENT
+        Repository: $ECR_REPOSITORY_NAME
+        Image Tag: $IMAGE_TAG
+        Scan Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+
+        Vulnerability Counts:
+        - CRITICAL: $CRITICAL_COUNT
+        - HIGH: $HIGH_COUNT
+        - MEDIUM: $MEDIUM_COUNT
+        - LOW: $LOW_COUNT
+        - INFORMATIONAL: $INFORMATIONAL_COUNT
+
+        Action Required:
+        $(if [ "$CRITICAL_COUNT" -gt 0 ]; then echo "⚠️  Application team must fix CRITICAL vulnerabilities before production deployment"; fi)
+        $(if [ "$HIGH_COUNT" -gt 0 ]; then echo "⚠️  Application team should review HIGH severity vulnerabilities"; fi)
+
+        View Details:
+        https://console.aws.amazon.com/ecr/repositories/private/${AWS_ACCOUNT_ID}/${ECR_REPOSITORY_NAME}?region=${AWS_DEFAULT_REGION}
+        EOF
+          )
+          
+          aws sns publish \
+            --topic-arn "$SNS_TOPIC_ARN" \
+            --subject "ECR Scan Alert [$SEVERITY_LABEL] - $ECR_REPOSITORY_NAME:$IMAGE_TAG" \
+            --message "$NOTIFICATION_MESSAGE" \
+            --region "$AWS_DEFAULT_REGION" || echo "WARNING: Failed to send SNS notification"
+        else
+          echo "Notification disabled for this environment"
+        fi
+      
+      # Check if deployment should be blocked
+      - |
+        if [ "$BLOCK_ON_CRITICAL" = "true" ]; then
+          if [ "$CRITICAL_COUNT" -gt "$MAX_CRITICAL_FINDINGS" ]; then
+            echo "=========================================="
+            echo "DEPLOYMENT BLOCKED"
+            echo "=========================================="
+            echo "Found $CRITICAL_COUNT CRITICAL vulnerabilities (threshold: $MAX_CRITICAL_FINDINGS)"
+            echo "Application team must fix these vulnerabilities before deployment"
+            echo "View details: https://console.aws.amazon.com/ecr/repositories/private/${AWS_ACCOUNT_ID}/${ECR_REPOSITORY_NAME}?region=${AWS_DEFAULT_REGION}"
+            echo "=========================================="
+            exit 1
+          fi
+        else
+          echo "WARNING: Found $CRITICAL_COUNT CRITICAL vulnerabilities, but deployment is NOT blocked in $ENVIRONMENT environment"
+          if [ "$CRITICAL_COUNT" -gt 0 ]; then
+            echo "⚠️  Application team should fix these vulnerabilities"
+          fi
+        fi
+      
+      - echo "=========================================="
+      - echo "Scan validation passed"
+      - echo "=========================================="
+
+artifacts:
+  files:
+    - scan-findings.json
+    - scan-summary.txt
+  name: scan-results
