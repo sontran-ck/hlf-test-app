@@ -75,10 +75,10 @@ phases:
 
   post_build:
     commands:
-       - echo -e "\n=========================================="
-       - echo "Container Image Verification Completed"
-       - echo "=========================================="
-       - echo "Image: ${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
-       - echo "ECR Console: https://console.aws.amazon.com/ecr/repositories/private/${AWS_ACCOUNT_ID}/${ECR_REPOSITORY_NAME}?region=${AWS_DEFAULT_REGION}"
-       - echo "Image built by: GitHub Actions workflow"
-       - echo "=========================================="
+      - echo -e "\n=========================================="
+      - echo "Container Image Verification Completed"
+      - echo "=========================================="
+      - echo "Image: ${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
+      - echo "ECR Console: https://console.aws.amazon.com/ecr/repositories/private/${AWS_ACCOUNT_ID}/${ECR_REPOSITORY_NAME}?region=${AWS_DEFAULT_REGION}"
+      - echo "Image built by: GitHub Actions workflow"
+      - echo "=========================================="
