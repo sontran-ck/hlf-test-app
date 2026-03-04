@@ -3,6 +3,11 @@
 replicaCount: 2
 
 image:
+  # IMPORTANT: These values are placeholders and will be OVERRIDDEN by deploy_module.sh
+  # The deploy script automatically injects:
+  #   - image.repository from ECR_REPOSITORY_URL (computed from CloudFormation)
+  #   - image.tag from IMAGE_TAG (git commit short hash)
+  # You can leave these as-is or update for local testing only
   repository: 555631499450.dkr.ecr.ap-southeast-1.amazonaws.com/hlf-ecr-sit-static-app
   pullPolicy: Always
   tag: "latest"

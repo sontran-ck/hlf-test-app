@@ -1,6 +1,0 @@
-apiVersion: v2
-name: static-app
-description: A simple Helm chart for HLF static application
-type: application
-version: 1.0.0
-appVersion: "1.0.0"

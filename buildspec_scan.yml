@@ -5,29 +5,10 @@ version: 0.2
 # Trigger: After Build stage completes and image is pushed to ECR
 # Next: Deploy stage (if scan passes validation)
 
-env:
-  variables:
-    AWS_DEFAULT_REGION: "ap-southeast-1"
-    ENVIRONMENT: "sit"  # Override in CodePipeline: sit/uat/prod
-    ECR_REPOSITORY_NAME: "hlf-ecr-sit-static-app"
-    # AWS Inspector Scan Configuration (environment-specific)
-    # SIT: Warn only, no notifications
-    # UAT: Warn only, enable notifications  
-    # PROD: Block on CRITICAL, enable notifications, allow emergency override
-    SCAN_ON_PUSH_ENABLED: "true"
-    BLOCK_ON_CRITICAL: "false"  # Set via CodePipeline: false(SIT/UAT), true(PROD)
-    ENABLE_NOTIFICATION: "false"  # Set via CodePipeline: false(SIT), true(UAT/PROD)
-    SNS_TOPIC_ARN: ""  # Set from CloudFormation parameter
-    ALLOW_OVERRIDE: "false"  # Set via CodePipeline: false(SIT/UAT), true(PROD only)
-    # Severity thresholds for deployment blocking
-    MAX_CRITICAL_FINDINGS: "0"  # Block if CRITICAL > 0 (when BLOCK_ON_CRITICAL=true)
-    MAX_HIGH_FINDINGS: "999"  # Currently not blocking on HIGH
+
 phases:
   pre_build:
     commands:
-      - echo "=========================================="
-      - echo "Stage 2 AWS Inspector Vulnerability Scan Validation"
-      - echo "=========================================="
       - echo "Environment=$ENVIRONMENT"
       - echo "ECR Repository=$ECR_REPOSITORY_NAME"
       - export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -71,7 +52,7 @@ phases:
           fi
           echo "Scan status: $SCAN_STATUS (elapsed: ${ELAPSED}s)"
           if [ "$SCAN_STATUS" = "COMPLETE" ] || [ "$SCAN_STATUS" = "ACTIVE" ]; then
-            echo "✓ AWS Inspector scan completed successfully"
+            echo "AWS Inspector scan completed successfully"
             echo "Findings are available"
             break
           elif [ "$SCAN_STATUS" = "FAILED" ]; then

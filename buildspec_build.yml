@@ -7,18 +7,12 @@ version: 0.2
 
 env:
   variables:
-    AWS_DEFAULT_REGION: "ap-southeast-1"
-    ENVIRONMENT: "sit"
-    ECR_REPOSITORY_NAME: "hlf-ecr-sit-static-app"
     # Build configuration
     DOCKER_BUILDKIT: "1"
     
 phases:
   pre_build:
     commands:
-      - echo "=========================================="
-      - echo "Stage 1 Docker Build and Push to ECR"
-      - echo "=========================================="
       - echo "Environment=$ENVIRONMENT"
       - echo "Region=$AWS_DEFAULT_REGION"
       - export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)

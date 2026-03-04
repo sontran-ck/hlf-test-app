@@ -7,11 +7,6 @@ version: 0.2
 
 env:
   variables:
-    AWS_DEFAULT_REGION: "ap-southeast-1"
-    ENVIRONMENT: "uat"  # Override in CodePipeline: uat/prod
-    TARGET_ECR_REPOSITORY_NAME: "hlf-ecr-uat-static-app"
-    SIT_ACCOUNT_ID: ""  # Override in CodePipeline if cross-account
-    SIT_ECR_REPOSITORY_NAME: "hlf-ecr-sit-static-app"
     DOCKER_BUILDKIT: "1"
 
 phases:
@@ -37,10 +32,10 @@ phases:
         export SHORT_HASH=$(git rev-parse --short=7 HEAD)
         echo "Short Hash: ${SHORT_HASH}"
       
-      - echo "Target Environment: ${ENVIRONMENT}"
-      - echo "Target ECR: ${TARGET_ECR_REPOSITORY_NAME}"
-      - echo "Source SIT Account: ${SIT_ACCOUNT_ID}"
-      - echo "Source SIT ECR: ${SIT_ECR_REPOSITORY_NAME}"
+      - echo "Target Environment ${ENVIRONMENT}"
+      - echo "Target ECRx ${TARGET_ECR_REPOSITORY_NAME}"
+      - echo "Source SIT Accountx ${SIT_ACCOUNT_ID}"
+      - echo "Source SIT ECR ${SIT_ECR_REPOSITORY_NAME}"
       - echo "=========================================="
       
       # Setup ECR URIs
@@ -53,9 +48,9 @@ phases:
           export SIT_ECR_URI="${SIT_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${SIT_ECR_REPOSITORY_NAME}"
           export CROSS_ACCOUNT=true
         fi
-      - echo "Target ECR URI: ${TARGET_ECR_URI}"
-      - echo "SIT ECR URI: ${SIT_ECR_URI}"
-      - echo "Cross-Account: ${CROSS_ACCOUNT}"
+      - echo "Target ECR URI ${TARGET_ECR_URI}"
+      - echo "SIT ECR URI ${SIT_ECR_URI}"
+      - echo "Cross-Account ${CROSS_ACCOUNT}"
       
       # Login to target ECR
       - echo "Logging in to target ${ENVIRONMENT} ECR..."
@@ -76,7 +71,7 @@ phases:
     commands:
       - echo "Pulling image from SIT ECR..."
       - export SIT_IMAGE_URI="${SIT_ECR_URI}:${SHORT_HASH}"
-      - echo "Pulling: ${SIT_IMAGE_URI}"
+      - echo "Pulling ${SIT_IMAGE_URI}"
       - |
         if docker pull ${SIT_IMAGE_URI}; then
           echo "Successfully pulled image from SIT ECR"
@@ -107,8 +102,8 @@ phases:
       - echo "Tagging image for ${ENVIRONMENT}..."
       - docker tag ${SIT_IMAGE_URI} ${TARGET_ECR_URI}:${GIT_TAG}
       - docker tag ${SIT_IMAGE_URI} ${TARGET_ECR_URI}:latest
-      - echo "Tagged as: ${TARGET_ECR_URI}:${GIT_TAG}"
-      - echo "Tagged as: ${TARGET_ECR_URI}:latest"
+      - echo "Tagged as ${TARGET_ECR_URI}:${GIT_TAG}"
+      - echo "Tagged as ${TARGET_ECR_URI}:latest"
       - docker images | grep ${TARGET_ECR_REPOSITORY_NAME}
 
   post_build:

@@ -234,7 +234,45 @@ fi
 
 # Wait for External Secrets to sync
 echo "Waiting for External Secrets to sync..."
-sleep 10
+echo "Checking ExternalSecret status..."
+
+# Wait up to 2 minutes for ExternalSecret to be ready
+TIMEOUT=120
+ELAPSED=0
+while [ $ELAPSED -lt $TIMEOUT ]; do
+    ES_STATUS=$(kubectl get externalsecret static-app-rds-credentials -n ${APP_NAMESPACE} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
+    
+    if [ "$ES_STATUS" = "True" ]; then
+        echo "ExternalSecret is ready and synced"
+        
+        # Verify the secret exists and has data
+        if kubectl get secret static-app-database-secret -n ${APP_NAMESPACE} -o jsonpath='{.data.DB_PASSWORD}' 2>/dev/null | base64 -d | grep -q .; then
+            echo "Database password secret is available"
+            break
+        else
+            echo "Secret exists but DB_PASSWORD is empty, waiting..."
+        fi
+    else
+        echo "Waiting for ExternalSecret to sync... (${ELAPSED}s/${TIMEOUT}s)"
+    fi
+    
+    sleep 5
+    ELAPSED=$((ELAPSED + 5))
+done
+
+if [ $ELAPSED -ge $TIMEOUT ]; then
+    echo "ERROR: ExternalSecret failed to sync within ${TIMEOUT} seconds!"
+    kubectl describe externalsecret static-app-rds-credentials -n ${APP_NAMESPACE} || true
+    exit 1
+fi
+
+# Force pod restart to ensure it picks up the secret
+# This is critical: pods that started before the secret existed won't have DB_PASSWORD
+echo "Ensuring pods have the latest secrets..."
+kubectl rollout restart deployment/static-app -n ${APP_NAMESPACE}
+kubectl rollout status deployment/static-app -n ${APP_NAMESPACE} --timeout=5m
+
+echo "All pods restarted with database credentials"
 
 # Show deployment status
 echo "=========================================="

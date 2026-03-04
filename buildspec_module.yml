@@ -2,10 +2,7 @@ version: 0.2
 
 env:
   variables:
-    AWS_DEFAULT_REGION: "ap-southeast-1"
-    EKS_CLUSTER_NAME: "hlf-eks-sit-cluster"
     APP_NAMESPACE: "default"
-    ENVIRONMENT: "sit"
     MODULE_ENABLE: "true"
 
 phases:
@@ -66,7 +63,8 @@ phases:
           export COMMIT_HASH=${CODEBUILD_RESOLVED_SOURCE_VERSION}
           export SHORT_HASH=$(echo ${COMMIT_HASH} | cut -c1-7)
           export IMAGE_TAG=${SHORT_HASH:-latest}
-          export ECR_REPOSITORY_URL="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/hlf-ecr-sit-static-app"
+          # ECR_REPOSITORY_NAME is injected by CodeBuild from CloudFormation
+          export ECR_REPOSITORY_URL="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}"
           
           echo "Commit Hash (full)=${COMMIT_HASH}"
           echo "Image Tag (short-hash)=${IMAGE_TAG}"
@@ -95,9 +93,7 @@ phases:
           
           echo "Checking SecurityGroupPolicy status..."
           kubectl get securitygrouppolicies -n ${APP_NAMESPACE} || echo "No SecurityGroupPolicy found"
-          
-          echo "Checking application pods status..."
-          kubectl get pods -n ${APP_NAMESPACE} -l app.kubernetes.io/name=static-app
+        
         fi
       
       - echo "=========================================="
